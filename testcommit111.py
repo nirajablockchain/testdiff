@@ -10,13 +10,13 @@ DIFF_PROMPT = "Generate a succinct summary of the following code changes:"
 COMMIT_MSG_PROMPT = "Using no more than 50 characters, generate a descriptive commit message from these summaries:"
 PROMPT_CUTOFF = 10000
 ###openai.organization = os.getenv("OPENAI_ORG_ID")
-openai.api_key = "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"
+openai.api_key = ""
 
 
 def get_diff():
     arguments = [
         "git", "--no-pager", "diff", "--staged", "--ignore-space-change",
-        "--ignore-all-space", "--ignore-blank-lines"
+        "--ignore-all-space", "--ignore-blank-lines" ,"main.py"
     ]
     diff_process = subprocess.run(arguments, capture_output=True, text=True)
     diff_process.check_returncode()
