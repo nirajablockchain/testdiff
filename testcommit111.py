@@ -5,22 +5,21 @@ import openai
 import os
 import subprocess
 import sys
+import git
+PIPE = subprocess.PIPE
 
-DIFF_PROMPT = "Generate a succinct summary of the following code changes:"
-COMMIT_MSG_PROMPT = "Using no more than 50 characters, generate a descriptive commit message from these summaries:"
-PROMPT_CUTOFF = 10000
-###openai.organization = os.getenv("OPENAI_ORG_ID")
-openai.api_key = ""
+DIFF_PROMPT = "Generate a detailed summary of the following code changes in English and if you're unsure of the answer, dont add :"
+COMMIT_MSG_PROMPT = "Using no more than 1000 characters, generate a descriptive commit message from these summaries:"
+PROMPT_CUTOFF = 1000
+
+openai.api_key = "pppppp"
 
 
 def get_diff():
-    arguments = [
-        "git", "--no-pager", "diff", "--staged", "--ignore-space-change",
-        "--ignore-all-space", "--ignore-blank-lines" ,"main.py"
-    ]
-    diff_process = subprocess.run(arguments, capture_output=True, text=True)
-    diff_process.check_returncode()
-    return diff_process.stdout.strip()
+    arguments = "git diff --ignore-blank-lines --ignore-all-space --ignore-space-change --diff-filter=CMRTUXB master"
+    command = subprocess.Popen(arguments.split(), stdout=PIPE, stderr=PIPE)
+    stdoutput, stderroutput = command.communicate()
+    return stdoutput.decode('utf-8')
 
 
 def parse_diff(diff):
@@ -59,36 +58,30 @@ def assemble_diffs(parsed_diffs, cutoff):
 
 
 async def complete(prompt):
-    print(prompt[:PROMPT_CUTOFF + 100])
+    if prompt[:PROMPT_CUTOFF + 100].strip() ==DIFF_PROMPT:
+        return ""
     completion_resp = openai.Completion.create(
-        model="code-davinci-002",
-        prompt=prompt[:PROMPT_CUTOFF + 100],
+        model="text-davinci-003",
+        prompt=prompt[:PROMPT_CUTOFF].strip() +"\"\"\"" ,
         temperature=0,
-        max_tokens=1500,
+        max_tokens=3500,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0,
         stop=["\"\"\""]
     )
-    # completion_resp = await openai.ChatCompletion.acreate(
-    #     model="code-davinci-002",
-    #     messages=[{
-    #         "role": "user",
-    #         "content": prompt[:PROMPT_CUTOFF + 100]
-    #     }],
-    #     max_tokens=128)
-    #completion = completion_resp.choices[0].message.content.strip()
-    print(completion_resp)
+
+    #print(completion_resp)
     return completion_resp
 
 
 async def summarize_diff(diff):
-    assert diff
+    #assert diff
     return await complete(DIFF_PROMPT + "\n\n" + diff + "\n\n")
 
 
 async def summarize_summaries(summaries):
-    assert summaries
+    #assert summaries
     return await complete(COMMIT_MSG_PROMPT + "\n\n" + summaries + "\n\n")
 
 
@@ -100,27 +93,34 @@ async def generate_commit_message(diff):
     assembled_diffs = assemble_diffs(parse_diff(diff), PROMPT_CUTOFF)
     summaries = await asyncio.gather(
         *[summarize_diff(diff) for diff in assembled_diffs])
-    return await summarize_summaries("\n".join(summaries))
+    final_summary = ""
+    for summary in summaries :
+        if summary != "":
+            final_summary = final_summary + summary["choices"][0]["text"].strip() +".\t"
+    #return final_summary
+    print("\n Final Summary: " + final_summary)
+    return await summarize_summaries(final_summary)
 
-
-def commit(message):
-    # will ignore message if diff is empty
-    return subprocess.run(["git", "commit", "--message", message,
-                           "--edit"]).returncode
+#
+# def commit(message):
+#     # will ignore message if diff is empty
+#     return subprocess.run(["git", "commit", "--message", message,
+#                            "--edit"]).returncode
 
 
 async def main():
     try:
         diff = get_diff()
+        print ("\n Git Diff : " + diff)
         commit_message = await generate_commit_message(diff)
     except UnicodeDecodeError:
         print("gpt-commit does not support binary files", file=sys.stderr)
         commit_message = "# gpt-commit does not support binary files. Please enter a commit message manually or unstage any binary files."
 
-    if "--print-message" in sys.argv:
-        print(commit_message)
-    else:
-        exit(commit(commit_message))
+    # if "--print-message" in sys.argv:
+    print("\n Commit Message Summarized : " + commit_message["choices"][0]["text"].strip())
+    # else:
+    #     #exit(commit(commit_message))
 
 
 if __name__ == "__main__":
