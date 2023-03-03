@@ -2,7 +2,7 @@
 import os
 import openai
 
-openai.api_key = "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"
+openai.api_key = ""
 
 
 prompt = "#Generate python mock test code for the rest apis:\n\n\n{}\n{}"
